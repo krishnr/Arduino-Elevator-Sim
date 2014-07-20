@@ -10,6 +10,12 @@ const int floor2LED = 12;
 const int floor3LED = 13;
 int prescaler = 64;
 float counter_freq;
+const int clockCyclesPerMicrosecond = 16000000/1000000;
+const int MICROSECONDS_PER_TIMER0_OVERFLOW = ((64*256)*1000)/(16000000/1000);
+volatile int overflowCount=0;
+volatile int millisCount=0;
+volatile float fraction = 0;
+volatile unsigned long m = 0;
 
 void setup() {
   pinMode(floor0Pin, INPUT_PULLUP);
@@ -21,7 +27,12 @@ void setup() {
   pinMode(floor2LED, OUTPUT);
   pinMode(floor3LED, OUTPUT);
   counter_freq = 16e6/64;
-  //TCCR0B = (_BV(CS00));
+
+
+  TIMSK1=0x01; // enabled global and timer overflow interrupt;
+  TCCR1A = 0x00; // normal operation page 148 (mode0);
+  TCNT1=0x0BDC; // set initial value to remove time error (16bit counter register)
+  TCCR1B = 0x04; // start timer/ set clock
   
   Serial.begin(9600); 
   
@@ -55,12 +66,12 @@ void loop() {
       for(int i = currentFloor; i < destinationFloor; i++) {
         //wait for travel time
         digitalWrite(i+9, LOW);
-        delay(500);
+        delay(1000);
         digitalWrite(i+10, HIGH);
         Serial.print("On floor ");
         Serial.print(i);
         Serial.println();
-        delay(500);
+        delay(1000);
       }
     }  
     
@@ -70,22 +81,46 @@ void loop() {
       for(int i = currentFloor; i > destinationFloor; i--) {
         //wait for travel time
         digitalWrite(i+11, LOW);
-        delay(500);
+        delay(1000);
         digitalWrite(i+10, HIGH);
         Serial.print("On floor ");
         Serial.println(i);
-        delay(500);
+        delay(1000);
       }
     } 
     
     digitalWrite(destinationFloor+9, LOW);
     digitalWrite(destinationFloor+11, LOW);
-    delay(500);
+    delay(1000);
     Serial.print("Arrived at ");
     Serial.println(destinationFloor);
+    Serial.println(time());
     
     //open and close door
     
     currentFloor = destinationFloor;
   }
+}
+
+ISR(TIMER1_OVF_vect)
+{
+  
+    TCNT1=0x0BDC; 
+    overflowCount++;
+}
+    
+unsigned long time()
+{
+    unsigned long n;
+    uint8_t oldSREG = SREG;
+ 
+    // disable interrupts while we read timer0_millis or we might get an
+    // inconsistent value (e.g. in the middle of a write to timer0_millis)
+    cli();
+    n = TCNT1 + (overflowCount * 62500);
+    n = n/62500.0*1000.0;
+    SREG = oldSREG; 
+    
+    
+    return n;
 }
