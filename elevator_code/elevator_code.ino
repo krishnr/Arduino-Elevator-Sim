@@ -10,8 +10,6 @@ const int floor2LED = 12;
 const int floor3LED = 13;
 int prescaler = 64;
 float counter_freq;
-const int clockCyclesPerMicrosecond = 16000000/1000000;
-const int MICROSECONDS_PER_TIMER0_OVERFLOW = ((64*256)*1000)/(16000000/1000);
 volatile int overflowCount=0;
 volatile int millisCount=0;
 volatile float fraction = 0;
@@ -66,12 +64,12 @@ void loop() {
       for(int i = currentFloor; i < destinationFloor; i++) {
         //wait for travel time
         digitalWrite(i+9, LOW);
-        delay(1000);
+        pause(1000);
         digitalWrite(i+10, HIGH);
         Serial.print("On floor ");
         Serial.print(i);
         Serial.println();
-        delay(1000);
+        pause(1000);
       }
     }  
     
@@ -81,17 +79,17 @@ void loop() {
       for(int i = currentFloor; i > destinationFloor; i--) {
         //wait for travel time
         digitalWrite(i+11, LOW);
-        delay(1000);
+        pause(1000);
         digitalWrite(i+10, HIGH);
         Serial.print("On floor ");
         Serial.println(i);
-        delay(1000);
+        pause(1000);
       }
     } 
     
     digitalWrite(destinationFloor+9, LOW);
     digitalWrite(destinationFloor+11, LOW);
-    delay(1000);
+    pause(1000);
     Serial.print("Arrived at ");
     Serial.println(destinationFloor);
     Serial.println(time());
@@ -124,3 +122,12 @@ unsigned long time()
     
     return n;
 }
+
+void pause(int delayTime)
+{
+  int startTime = time();
+  
+  while(time() <= startTime+delayTime) {}
+
+  return;
+}  
