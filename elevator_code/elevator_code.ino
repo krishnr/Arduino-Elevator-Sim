@@ -8,8 +8,6 @@ const int floor0LED = 10;
 const int floor1LED = 11;
 const int floor2LED = 12;
 const int floor3LED = 13;
-int prescaler = 64;
-float counter_freq;
 volatile int overflowCount=0;
 volatile int millisCount=0;
 volatile float fraction = 0;
@@ -24,7 +22,6 @@ void setup() {
   pinMode(floor1LED, OUTPUT);
   pinMode(floor2LED, OUTPUT);
   pinMode(floor3LED, OUTPUT);
-  counter_freq = 16e6/64;
 
 
   TIMSK1=0x01; // enabled global and timer overflow interrupt;
@@ -40,8 +37,6 @@ void loop() {
   
   digitalWrite(currentFloor+10, HIGH);
   
-  
-  while(digitalRead(floor0Pin)==HIGH && digitalRead(floor1Pin)==HIGH && digitalRead(floor2Pin)==HIGH && digitalRead(floor3Pin)==HIGH) {
     if(digitalRead(floor0Pin)==LOW){
       destinationFloor=0;
       Serial.println("Going to floor 0");
@@ -55,7 +50,6 @@ void loop() {
       destinationFloor=3;
       Serial.println("Going to floor 3");
     }
-  }
   
   if(destinationFloor != currentFloor) {
     //if going up
@@ -64,12 +58,12 @@ void loop() {
       for(int i = currentFloor; i < destinationFloor; i++) {
         //wait for travel time
         digitalWrite(i+9, LOW);
-        pause(1000);
+        pause(750);
         digitalWrite(i+10, HIGH);
         Serial.print("On floor ");
         Serial.print(i);
         Serial.println();
-        pause(1000);
+        pause(750);
       }
     }  
     
@@ -79,20 +73,20 @@ void loop() {
       for(int i = currentFloor; i > destinationFloor; i--) {
         //wait for travel time
         digitalWrite(i+11, LOW);
-        pause(1000);
+        pause(750);
         digitalWrite(i+10, HIGH);
         Serial.print("On floor ");
         Serial.println(i);
-        pause(1000);
+        pause(750);
       }
     } 
     
     digitalWrite(destinationFloor+9, LOW);
     digitalWrite(destinationFloor+11, LOW);
-    pause(1000);
+    pause(750);
     Serial.print("Arrived at ");
     Serial.println(destinationFloor);
-    Serial.println(time());
+    Serial.println();
     
     //open and close door
     
@@ -125,7 +119,8 @@ unsigned long time()
 
 void pause(int delayTime)
 {
-  int startTime = time();
+  long startTime = time();
+  
   
   while(time() <= startTime+delayTime) {}
 
