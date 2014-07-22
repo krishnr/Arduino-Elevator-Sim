@@ -12,10 +12,13 @@ const int doorClosePin = 2;
 const int doorOpenPin = 3;
 const int expressPin = 8;
 const int emergencyStopPin = 0;
+const int speakerPin = 9;
 volatile int overflowCount=0;
 const int difference = floor0LED;
-const int pauseTime = 750;
-const int doorTime = 500;
+volatile int pauseTime = 1000;
+volatile int doorTime = 3000;
+volatile boolean isStopped = false;
+boolean isPrinted = false;
 
 void setup() {
   pinMode(floor0Pin, INPUT_PULLUP);
@@ -26,11 +29,12 @@ void setup() {
   pinMode(floor1LED, OUTPUT);
   pinMode(floor2LED, OUTPUT);
   pinMode(floor3LED, OUTPUT);
+  pinMode(speakerPin, OUTPUT);
   
-  digitalWrite(doorClosePin, HIGH);
+
   attachInterrupt(0, doorClose, CHANGE);
   
-  digitalWrite(doorOpenPin, HIGH);
+
   attachInterrupt(1, doorOpen, CHANGE);
   
   digitalWrite(expressPin, HIGH);
@@ -53,7 +57,7 @@ void setup() {
 
 void loop() {
   
-  
+  if(!isStopped) {
   digitalWrite(currentFloor+difference, HIGH);
   long startTime = time();
   
@@ -83,10 +87,10 @@ void loop() {
     //if going up
     if(destinationFloor-1 > currentFloor) {
       
-      for(int i = currentFloor; i < destinationFloor; i++) {
+      for(int i = currentFloor; i < destinationFloor && !isStopped; i++) {
         //wait for travel time
         digitalWrite(i+difference-1, LOW);
-        pause(750);
+        pause(pauseTime);
         digitalWrite(i+difference, HIGH);
         Serial.print("On floor ");
         Serial.print(i);
@@ -98,8 +102,9 @@ void loop() {
     //if going down
     if(destinationFloor-1 < currentFloor) {
       
-      for(int i = currentFloor; i > destinationFloor; i--) {
+      for(int i = currentFloor; i > destinationFloor && !isStopped; i--) {
         //wait for travel time
+        
         digitalWrite(i+difference+1, LOW);
         pause(pauseTime);
         digitalWrite(i+difference, HIGH);
@@ -109,21 +114,33 @@ void loop() {
       }
     } 
     
-    digitalWrite(destinationFloor + difference -1, LOW);
-    digitalWrite(destinationFloor + difference +1, LOW);
-    pause(pauseTime);
-    Serial.print("Arrived at floor ");
-    Serial.println(destinationFloor);
-    Serial.print("Your total trip time was ");
-    Serial.print((time() - startTime)/1000.0);
-    Serial.println(" seconds.");
-    Serial.println();
+   if(!isStopped){
+      digitalWrite(destinationFloor + difference -1, LOW);
+      digitalWrite(destinationFloor + difference +1, LOW);
+      pause(pauseTime);
+      digitalWrite(destinationFloor + difference, HIGH);
+      Serial.print("Arrived at floor ");
+      Serial.println(destinationFloor);
+      Serial.print("Your total trip time was ");
+      Serial.print((time() - startTime)/1000.0);
+      Serial.println(" seconds.");
+      Serial.println();
+      tone(speakerPin, 1000, 100);
+      pause(200);
+      tone(speakerPin, 1000, 100);
+   }
+  }
     
     //open and close door
-    
     currentFloor = destinationFloor;
-    
+
+    } else if(!isPrinted) {
+      Serial.println("EMERGENCY STOP!");
+      Serial.println();
+      
+      isPrinted = true;
     }
+    
 }
 
 ISR(TIMER1_OVF_vect)
@@ -159,17 +176,20 @@ void pause(int delayTime)
 }  
 
 void doorClose() {
-  
+
 }
 
 void doorOpen() {
-  
+
+
 }
 
 ISR (PCINT0_vect) {
-
+  pauseTime *= 0.85;
 }
 
 ISR (PCINT2_vect) {
-  
+  isStopped = true;
 }
+
+
