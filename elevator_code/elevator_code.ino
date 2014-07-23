@@ -274,10 +274,9 @@ void closeDoor() {
   
   for(int i = 0; i <= doorSize/2; i++) {
     
-    pause(doorTime);
     digitalWrite(doorLight[i], HIGH);
     digitalWrite(doorLight[doorSize-i], HIGH);
-    
+    pause(doorTime);
     if(isDoorOpenPressed) {
       isDoorClosePressed=false;
       isDoorOpenPressed = false;
