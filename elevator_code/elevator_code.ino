@@ -16,9 +16,19 @@ const int speakerPin = 9;
 volatile int overflowCount=0;
 const int difference = floor0LED;
 volatile int pauseTime = 1000;
-volatile int doorTime = 3000;
+volatile int doorTime = 800;
 volatile boolean isStopped = false;
 boolean isPrinted = false;
+const int doorSize = 5;
+const int doorLight[] = {A0, A1, A2, A3, A4, A5};
+volatile boolean isDoorClosePressed = false;
+volatile boolean isDoorOpenPressed = false;
+volatile long doorOpenTime = 0;
+volatile long doorCloseTime = 0;
+volatile boolean isFirstTime = true;
+volatile long startTime = 0;
+volatile boolean hasMoved = false;
+volatile boolean isPrintedOnce = false;
 
 void setup() {
   pinMode(floor0Pin, INPUT_PULLUP);
@@ -30,12 +40,24 @@ void setup() {
   pinMode(floor2LED, OUTPUT);
   pinMode(floor3LED, OUTPUT);
   pinMode(speakerPin, OUTPUT);
+  pinMode(A0, OUTPUT);
+  pinMode(A1, OUTPUT);
+  pinMode(A2, OUTPUT);
+  pinMode(A3, OUTPUT);
+  pinMode(A4, OUTPUT);
+  pinMode(A5, OUTPUT);
+  
+  digitalWrite(A0, HIGH);
+  digitalWrite(A1, HIGH);
+  digitalWrite(A2, HIGH);
+  digitalWrite(A3, HIGH);
+  digitalWrite(A4, HIGH);
+  digitalWrite(A5, HIGH);
+
+  attachInterrupt(0, doorCloseInterrupt, CHANGE);
   
 
-  attachInterrupt(0, doorClose, CHANGE);
-  
-
-  attachInterrupt(1, doorOpen, CHANGE);
+  attachInterrupt(1, doorOpenInterrupt, CHANGE);
   
   digitalWrite(expressPin, HIGH);
   PCICR |= _BV(PCIE0);
@@ -53,13 +75,17 @@ void setup() {
   
   Serial.begin(9600); 
   
+  digitalWrite(currentFloor+difference, HIGH);
+  
+  
 }
 
 void loop() {
   
+  
   if(!isStopped) {
+  
   digitalWrite(currentFloor+difference, HIGH);
-  long startTime = time();
   
     if(digitalRead(floor0Pin)==LOW){
       destinationFloor=0;
@@ -83,7 +109,20 @@ void loop() {
       }
     }
   
+  if(isDoorOpenPressed) {
+    isDoorOpenPressed = false;
+    openDoor();
+  }else if(isDoorClosePressed){
+    isDoorClosePressed = false;
+    closeDoor();
+  }
+  
   if(destinationFloor != currentFloor) {
+    
+    startTime = time();
+    hasMoved=true;
+    isPrintedOnce = false;
+    
     //if going up
     if(destinationFloor-1 > currentFloor) {
       
@@ -121,13 +160,11 @@ void loop() {
       digitalWrite(destinationFloor + difference, HIGH);
       Serial.print("Arrived at floor ");
       Serial.println(destinationFloor);
-      Serial.print("Your total trip time was ");
-      Serial.print((time() - startTime)/1000.0);
-      Serial.println(" seconds.");
-      Serial.println();
       tone(speakerPin, 1000, 100);
       pause(200);
       tone(speakerPin, 1000, 100);
+      openDoor();
+      hasMoved = false;
    }
   }
     
@@ -136,9 +173,13 @@ void loop() {
 
     } else if(!isPrinted) {
       Serial.println("EMERGENCY STOP!");
+      openDoor();
       Serial.println();
       
       isPrinted = true;
+    } else {
+      tone(9, 2000, 100);
+      pause(200);
     }
     
 }
@@ -175,21 +216,91 @@ void pause(int delayTime)
   return;
 }  
 
-void doorClose() {
-
+void doorCloseInterrupt() {
+  isDoorClosePressed = true;
 }
 
-void doorOpen() {
-
-
+void doorOpenInterrupt() {
+  isDoorOpenPressed = true;
 }
 
 ISR (PCINT0_vect) {
   pauseTime *= 0.85;
+  doorTime *= 0.85;
 }
 
 ISR (PCINT2_vect) {
   isStopped = true;
+}
+
+void openDoor() {
+   
+  isDoorClosePressed = false;
+  isDoorOpenPressed = false;
+
+   
+   if(isFirstTime){
+     doorOpenTime = time();
+     isFirstTime=false;
+   }
+  
+  for(int i = doorSize/2; i >= 0; i--) {
+     
+
+     digitalWrite(doorLight[i], LOW);
+     digitalWrite(doorLight[doorSize-i], LOW);
+     
+
+    if(isDoorClosePressed) {
+      isDoorClosePressed = false;
+      isDoorOpenPressed = false;
+      break;
+     }
+   pause(doorTime);  
+ }
+ 
+ if(!isStopped){
+  pause(1000);
+  closeDoor();
+ }
+
+
+}
+ 
+void closeDoor() {
+  
+  isDoorClosePressed = false;
+  isDoorOpenPressed = false;
+  
+  for(int i = 0; i <= doorSize/2; i++) {
+    
+    pause(doorTime);
+    digitalWrite(doorLight[i], HIGH);
+    digitalWrite(doorLight[doorSize-i], HIGH);
+    
+    if(isDoorOpenPressed) {
+      isDoorClosePressed=false;
+      isDoorOpenPressed = false;
+      openDoor();
+      break;
+    }
+  }
+    
+    isFirstTime = true;
+    doorCloseTime = time();
+    if(!isPrintedOnce) {
+      Serial.print("The door was open for a total of ");
+      Serial.print((doorCloseTime - doorOpenTime)/1000.0);
+      Serial.println(" seconds.");
+      isPrintedOnce = true;
+    if(hasMoved) {
+      Serial.print("Your total trip time was ");
+      Serial.print((time() - startTime)/1000.0);
+      Serial.println(" seconds.");
+      Serial.println();
+    }
+    }
+    
 }
 
 
