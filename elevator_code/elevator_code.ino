@@ -14,7 +14,7 @@ const int expressPin = 8;
 const int emergencyStopPin = 0;
 const int speakerPin = 9;
 volatile int overflowCount=0;
-const int difference = floor0LED;
+const int difference = 10;
 volatile int pauseTime = 1000;
 volatile int doorTime = 800;
 volatile boolean isStopped = false;
@@ -161,8 +161,9 @@ void loop() {
       
       for(int i = currentFloor; i > destinationFloor && !isStopped; i--) {
         //wait for travel time
-        
-        digitalWrite(i+difference+1, LOW);
+        if(i != 3) {
+          digitalWrite(i+difference+1, LOW);
+        }
         pause(pauseTime);
         digitalWrite(i+difference, HIGH);
         Serial.print("On floor ");
@@ -172,8 +173,11 @@ void loop() {
     } 
     
    if(!isStopped){
-      digitalWrite(destinationFloor + difference -1, LOW);
-      digitalWrite(destinationFloor + difference +1, LOW);
+      digitalWrite(floor0LED, LOW);
+      digitalWrite(floor1LED, LOW);
+      digitalWrite(floor2LED, LOW);
+      digitalWrite(floor3LED, LOW);
+      
       pause(pauseTime);
       digitalWrite(destinationFloor + difference, HIGH);
       Serial.print("Arrived at floor ");
