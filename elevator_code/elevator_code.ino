@@ -31,15 +31,24 @@ volatile boolean hasMoved = false;
 volatile boolean isPrintedOnce = false;
 
 void setup() {
+  //Sets up all the necessary pins and their modes
+  
+  //These are the buttons for the various floors. Default value of high
   pinMode(floor0Pin, INPUT_PULLUP);
   pinMode(floor1Pin, INPUT_PULLUP);
   pinMode(floor2Pin, INPUT_PULLUP);
   pinMode(floor3Pin, INPUT_PULLUP);
+  
+  //The lights corresponding to the floors, ranging from 0-3
   pinMode(floor0LED, OUTPUT);
   pinMode(floor1LED, OUTPUT);
   pinMode(floor2LED, OUTPUT);
   pinMode(floor3LED, OUTPUT);
+  
+  //The speaker
   pinMode(speakerPin, OUTPUT);
+  
+  //These are the lights for the door
   pinMode(A0, OUTPUT);
   pinMode(A1, OUTPUT);
   pinMode(A2, OUTPUT);
@@ -47,6 +56,7 @@ void setup() {
   pinMode(A4, OUTPUT);
   pinMode(A5, OUTPUT);
   
+  //At the beginning of the program, the doors are closed i.e. all the leds corresponding to the door is on
   digitalWrite(A0, HIGH);
   digitalWrite(A1, HIGH);
   digitalWrite(A2, HIGH);
@@ -54,37 +64,45 @@ void setup() {
   digitalWrite(A4, HIGH);
   digitalWrite(A5, HIGH);
 
-  attachInterrupt(0, doorCloseInterrupt, CHANGE);
-  
 
+  //Attach interrupts
+  attachInterrupt(0, doorCloseInterrupt, CHANGE);
   attachInterrupt(1, doorOpenInterrupt, CHANGE);
   
+  //The pin coresponding to the express interrupt is at a default state of high
   digitalWrite(expressPin, HIGH);
-  PCICR |= _BV(PCIE0);
-  PCMSK0 = _BV(PCINT0);
+  
+  PCICR |= _BV(PCIE0); //Adds the bit value of Pin Change Interrupt Element 0 to the Pin change interrupt control register i.e.(pins D8-D13)
+  PCMSK0 = _BV(PCINT0); //Sets the pin change mask to the bit value of Pin change interrupt 8
+  
+  //The above ensures that the set of D8-D13 act as pin change interrupts, but the masking ensures that only
+  //the pin interrupt defined (i.e. pin 8) acts as interrupt
   
   digitalWrite(emergencyStopPin, HIGH);
-  PCICR |= _BV(PCIE2);
-  PCMSK2 = _BV(PCINT16);
+  PCICR |= _BV(PCIE2); //Also adds the bit value of Pin Change interrupt element 2 to the pin change interrupt control register
+  //This means that the set of pins D0-D7 will act as pin change interrupts
+  PCMSK2 = _BV(PCINT16); //Masks the value so that pin 0 is the only one that will act as pin change interrupts
   
 
-  TIMSK1=0x01; // enabled global and timer overflow interrupt;
+  TIMSK1=0x01;
   TCCR1A = 0x00; // normal operation mode
   TCNT1=0x0BDC; // set initial value to remove time error (16bit counter register)
-  TCCR1B = 0x04; // start timer/ set clock
+  TCCR1B = 0x04; // prescaler (value of 256)
   
   Serial.begin(9600); 
   
+  //Lights up the first LED (floor 0)
   digitalWrite(currentFloor+difference, HIGH);
   
   
 }
 
 void loop() {
-  
+  //As long as the program isn't stopped (I.E. emergency button has not been pressed)
   
   if(!isStopped) {
   
+  //Write the current
   digitalWrite(currentFloor+difference, HIGH);
   
     if(digitalRead(floor0Pin)==LOW){
