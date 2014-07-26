@@ -18,22 +18,22 @@ const int difference = 10;
 volatile int pauseTime = 1000;
 volatile int doorTime = 800;
 volatile boolean isStopped = false;
-boolean isPrinted = false;
+boolean isStopPrinted = false;
 const int doorSize = 5;
 const int doorLight[] = {A0, A1, A2, A3, A4, A5};
 volatile boolean isDoorClosePressed = false;
 volatile boolean isDoorOpenPressed = false;
 volatile long doorOpenTime = 0;
 volatile long doorCloseTime = 0;
-volatile boolean isFirstTime = true;
+volatile boolean isFirstTimeDoorOpened = true;
 volatile long startTime = 0;
 volatile boolean hasMoved = false;
-volatile boolean isPrintedOnce = false;
+volatile boolean isDoorTimePrinted = false;
 
 void setup() {
   //Sets up all the necessary pins and their modes
   
-  //These are the buttons for the various floors. Default value of high
+  //These are the buttons for the various floors. Default value of high (input pullup)
   pinMode(floor0Pin, INPUT_PULLUP);
   pinMode(floor1Pin, INPUT_PULLUP);
   pinMode(floor2Pin, INPUT_PULLUP);
@@ -66,28 +66,30 @@ void setup() {
 
 
   //Attach interrupts
+  //Interrupt for the doorClose button. Corresponds to Pin 2
   attachInterrupt(0, doorCloseInterrupt, CHANGE);
+  //Interrupt for the doorOpen button. Corresponds to Pin 3
   attachInterrupt(1, doorOpenInterrupt, CHANGE);
   
-  //The pin coresponding to the express interrupt is at a default state of high
+  //The pin coresponding to the express interrupt is at a default state of high (input pull up)
   digitalWrite(expressPin, HIGH);
   
-  PCICR |= _BV(PCIE0); //Adds the bit value of Pin Change Interrupt Element 0 to the Pin change interrupt control register i.e.(pins D8-D13)
+  PCICR |= _BV(PCIE0); //Adds the bit value of Pin Change Interrupt Enable 0 to the Pin change interrupt control register i.e.(pins D8-D13)
   PCMSK0 = _BV(PCINT0); //Sets the pin change mask to the bit value of Pin change interrupt 8
   
   //The above ensures that the set of D8-D13 act as pin change interrupts, but the masking ensures that only
   //the pin interrupt defined (i.e. pin 8) acts as interrupt
   
   digitalWrite(emergencyStopPin, HIGH);
-  PCICR |= _BV(PCIE2); //Also adds the bit value of Pin Change interrupt element 2 to the pin change interrupt control register
+  PCICR |= _BV(PCIE2); //Also adds the bit value of Pin Change interrupt enable 2 to the pin change interrupt control register
   //This means that the set of pins D0-D7 will act as pin change interrupts
   PCMSK2 = _BV(PCINT16); //Masks the value so that pin 0 is the only one that will act as pin change interrupts
   
 
-  TIMSK1=0x01;
-  TCCR1A = 0x00; // normal operation mode
-  TCNT1=0x0BDC; // set initial value to remove time error (16bit counter register)
-  TCCR1B = 0x04; // prescaler (value of 256)
+  TIMSK1=0x01; //Timer/Counter1 Overflow interrupt is enabled
+  TCCR1A = 0x00; // Timer Counter Control Register A  -- normal operation mode
+  TCNT1=0x0BDC; // set initial value of 3036 to remove time error (16bit counter register)
+  TCCR1B = 0x04; // setting the clock select bits to 4 -> prescaler (value of 256)
   
   Serial.begin(9600); 
   
@@ -98,11 +100,11 @@ void setup() {
 }
 
 void loop() {
-  //As long as the program isn't stopped (I.E. emergency button has not been pressed)
   
+  //As long as the program isn't stopped (I.E. emergency button has not been pressed)
   if(!isStopped) {
   
-  //Write the current
+  //Light up currentFloor
   digitalWrite(currentFloor+difference, HIGH);
   
     if(digitalRead(floor0Pin)==LOW){
@@ -135,18 +137,21 @@ void loop() {
     closeDoor();
   }
   
+  //If a different floor than the current one is pressed
+  //i.e. elevator is called or directed to move
   if(destinationFloor != currentFloor) {
     
     startTime = time();
     hasMoved=true;
-    isPrintedOnce = false;
+    isDoorTimePrinted = false;
     
     //if going up
     if(destinationFloor-1 > currentFloor) {
       
       for(int i = currentFloor; i < destinationFloor && !isStopped; i++) {
-        //wait for travel time
+        
         digitalWrite(i+difference-1, LOW);
+        //travel time
         pause(pauseTime);
         digitalWrite(i+difference, HIGH);
         Serial.print("On floor ");
@@ -160,10 +165,11 @@ void loop() {
     if(destinationFloor-1 < currentFloor) {
       
       for(int i = currentFloor; i > destinationFloor && !isStopped; i--) {
-        //wait for travel time
+        
         if(i != 3) {
           digitalWrite(i+difference+1, LOW);
         }
+        //travel time
         pause(pauseTime);
         digitalWrite(i+difference, HIGH);
         Serial.print("On floor ");
@@ -173,42 +179,54 @@ void loop() {
     } 
     
    if(!isStopped){
+     
+     //set all leds to low
       digitalWrite(floor0LED, LOW);
       digitalWrite(floor1LED, LOW);
       digitalWrite(floor2LED, LOW);
       digitalWrite(floor3LED, LOW);
       
       pause(pauseTime);
+      //light up the led of the destination floor
       digitalWrite(destinationFloor + difference, HIGH);
       Serial.print("Arrived at floor ");
       Serial.println(destinationFloor);
+      
+      //play ding ding tone
       tone(speakerPin, 1000, 100);
       pause(200);
       tone(speakerPin, 1000, 100);
+      
+      //open door
       openDoor();
+     
       hasMoved = false;
    }
   }
     
-    //open and close door
+    
     currentFloor = destinationFloor;
 
-    } else if(!isPrinted) {
+    } else if(!isStopPrinted) {
+
       Serial.println("EMERGENCY STOP!");
       openDoor();
       Serial.println();
       
-      isPrinted = true;
+      isStopPrinted = true;
     } else {
+      
+      //this loops and plays alarm sound
       tone(9, 2000, 100);
       pause(200);
     }
     
 }
 
+//Interrupt Service Routine called whenever the Timer 1's overflow flag is 1
 ISR(TIMER1_OVF_vect)
 {
-  
+    //sets initial value of timer to 3036  
     TCNT1=0x0BDC; 
     overflowCount++;
 }
@@ -216,14 +234,23 @@ ISR(TIMER1_OVF_vect)
 unsigned long time()
 {
     unsigned long n;
+    
+    //saves the state of the old status register to store the interrupt status
     uint8_t oldSREG = SREG;
  
-    // disable interrupts while we read timer0_millis or we might get an
-    // inconsistent value (e.g. in the middle of a write to timer0_millis)
+    // disable interrupts while we read timer1
     cli();
+    
+    //read timer 1 and add to overflow count
     n = TCNT1 + (overflowCount * 62500);
+    
+    //divide by 62500 to give # of seconds. Multiply by 1000 to give millis
     n = n/62500.0*1000.0;
+    
+    //restores state of old status register
     SREG = oldSREG; 
+    
+    //enable interrupts again
     sei();
     
     return n;
@@ -246,11 +273,13 @@ void doorOpenInterrupt() {
   isDoorOpenPressed = true;
 }
 
+//ISR for expressButton correspoinding to pin 8
 ISR (PCINT0_vect) {
   pauseTime *= 0.85;
   doorTime *= 0.85;
 }
 
+//ISR for emergency stop corresponding to pin 0
 ISR (PCINT2_vect) {
   isStopped = true;
 }
@@ -260,10 +289,10 @@ void openDoor() {
   isDoorClosePressed = false;
   isDoorOpenPressed = false;
 
-   
-   if(isFirstTime){
+   //start timer only first time door is opened
+   if(isFirstTimeDoorOpened){
      doorOpenTime = time();
-     isFirstTime=false;
+     isFirstTimeDoorOpened=false;
    }
   
   for(int i = doorSize/2; i >= 0; i--) {
@@ -272,7 +301,7 @@ void openDoor() {
      digitalWrite(doorLight[i], LOW);
      digitalWrite(doorLight[doorSize-i], LOW);
      
-
+    //if door close is pressed, break immediately
     if(isDoorClosePressed) {
       isDoorClosePressed = false;
       isDoorOpenPressed = false;
@@ -281,6 +310,7 @@ void openDoor() {
    pause(doorTime);  
  }
  
+ //always calls closeDoor after it is done
  if(!isStopped){
   pause(1000);
   closeDoor();
@@ -307,13 +337,16 @@ void closeDoor() {
     }
   }
     
-    isFirstTime = true;
+    isFirstTimeDoorOpened = true;
     doorCloseTime = time();
-    if(!isPrintedOnce) {
+    
+    //if door time is NOT printed yet
+    if(!isDoorTimePrinted) {
       Serial.print("The door was open for a total of ");
       Serial.print((doorCloseTime - doorOpenTime)/1000.0);
       Serial.println(" seconds.");
-      isPrintedOnce = true;
+      isDoorTimePrinted = true;
+    //only print trip time if elevator has moved
     if(hasMoved) {
       Serial.print("Your total trip time was ");
       Serial.print((time() - startTime)/1000.0);
